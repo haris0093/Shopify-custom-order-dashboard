@@ -252,7 +252,7 @@ export default function Home() {
                 <div className="modal-body" style={{maxHeight: '70vh', overflowY: 'auto'}}>
                   {selectedStoreOrders.map(order => (
                     <div key={order.id} className="mb-3 p-3 border rounded">
-                      <h6>Order ID: {order.name}</h6>
+                      <h6>Order ID: {order.name} {order.cancelled_at && <span className="badge bg-danger ms-2">Cancelled Order</span>}</h6>
                       {order.line_items && order.line_items.map(item => (
                         <div key={item.id} className="d-flex align-items-center mb-2">
                           {item.image && <img src={item.image.src} alt={item.title} style={{width: '50px', height: '50px', marginRight: '10px'}} />}

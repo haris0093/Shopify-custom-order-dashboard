@@ -54,7 +54,7 @@ export async function GET(request) {
           limit: 250,
           status: "any",
           order: "created_at asc",
-          fields: "id,name,email,financial_status,fulfillment_status,total_price,created_at,line_items",
+          fields: "id,name,email,financial_status,fulfillment_status,total_price,created_at,line_items,cancelled_at",
           created_at_min: start_date,
           created_at_max: end_date
         });
@@ -183,7 +183,7 @@ export async function GET(request) {
     if (order.fulfillment_status === 'fulfilled') stat.fulfilled++;
     if (order.financial_status === 'partially_refunded') stat.partiallyRefunded++;
     if (order.financial_status === 'refunded') stat.fullyRefunded++;
-    if (order.fulfillment_status === 'cancelled' || order.financial_status === 'voided') stat.cancelled++;
+    if (order.cancelled_at) stat.cancelled++;
     stat.revenue += parseFloat(order.total_price || 0);
   });
 
