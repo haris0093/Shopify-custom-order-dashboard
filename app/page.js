@@ -142,7 +142,26 @@ export default function Home() {
             </div>
           </div>
         </div>
+        {/* Store Selector */}
+         <div className="col-md-6 col-lg-4">
+          <div className="card shadow-sm" style={{ borderColor: "#28a745" }}>
+            <div className="card-body">
+              <h5 className="card-title" style={{ color: "#28a745" }}>Select Store</h5>
+              <select
+                className="form-select"
+                value={selectedStore}
+                onChange={(e) => setSelectedStore(e.target.value)}
+              >
+                <option value="all">All Stores</option>
+                {storeTable.map((store, index) => (
+                  <option key={index} value={store.brand}>{store.brand}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+        </div>
       </div>
+
 
       {loading && (
         <div className="text-center mb-4">
@@ -175,27 +194,6 @@ export default function Home() {
             <div className="card-body">
               <h5 className="card-title">Orders to Be Fulfilled</h5>
               <h2 className="card-text">{displayedSummary.ordersToFulfill}</h2>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Store Selector */}
-      <div className="row justify-content-center mb-4">
-        <div className="col-md-6 col-lg-4">
-          <div className="card shadow-sm" style={{ borderColor: "#28a745" }}>
-            <div className="card-body">
-              <h5 className="card-title" style={{ color: "#28a745" }}>Select Store</h5>
-              <select
-                className="form-select"
-                value={selectedStore}
-                onChange={(e) => setSelectedStore(e.target.value)}
-              >
-                <option value="all">All Stores</option>
-                {storeTable.map((store, index) => (
-                  <option key={index} value={store.brand}>{store.brand}</option>
-                ))}
-              </select>
             </div>
           </div>
         </div>
