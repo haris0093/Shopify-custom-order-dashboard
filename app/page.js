@@ -216,6 +216,8 @@ export default function Home() {
                   <th>Fully Refunded Orders</th>
                   <th>Cancelled Orders</th>
                   <th>Revenue</th>
+                  <th>Lost Amount</th>
+                  <th>Net Sales</th>
                 </tr>
               </thead>
               <tbody>
@@ -228,6 +230,8 @@ export default function Home() {
                     <td>{store.fullyRefunded}</td>
                     <td>{store.cancelled}</td>
                     <td className="text-success fw-semibold">{formatRevenue(store.revenue)}</td>
+                    <td className="text-danger fw-semibold">{formatRevenue(store.lostAmount || 0)}</td>
+                    <td className="text-primary fw-semibold">{formatRevenue((store.revenue || 0) - (store.lostAmount || 0))}</td>
                   </tr>
                 ))}
               </tbody>
@@ -248,22 +252,44 @@ export default function Home() {
                   <button type="button" className="btn-close" onClick={() => setShowModal(false)}></button>
                 </div>
                 <div className="modal-body" style={{maxHeight: '70vh', overflowY: 'auto'}}>
-                  {selectedStoreOrders.map(order => (
-                    <div key={order.id} className="mb-3 p-3 border rounded">
-                      <h6>Order ID: {order.name} {order.cancelled_at && <span className="badge bg-danger ms-2">Cancelled Order</span>}</h6>
-                      {order.line_items && order.line_items.map(item => (
-                        <div key={item.id} className="d-flex align-items-center mb-2">
-                          {item.image && <img src={item.image.src} alt={item.title} style={{width: '50px', height: '50px', marginRight: '10px'}} />}
-                          <div>
-                            <a href={item.product_url} target="_blank" rel="noopener noreferrer" style={{textDecoration: 'none', color: '#007bff'}}>
-                              <strong>{item.title}</strong>
-                            </a>
-                            {item.variant_title && <div>Variant: {item.variant_title}</div>}
+                  {selectedStoreOrders.map(order => {
+                    return (
+                      <div key={order.id} className="mb-3 p-3 border rounded">
+                        <h6>
+                          Order ID: {order.name}
+                          {order.cancelled_at && <span className="badge bg-danger ms-2">Cancelled Order</span>}
+                          {order.financial_status === 'partially_refunded' && (
+                            <span className="badge bg-warning ms-2">Partially Refunded</span>
+                          )}
+                          {order.financial_status === 'refunded' && <span className="badge bg-secondary ms-2">Fully Refunded</span>}
+                        </h6>
+                        {order.line_items && order.line_items.map(item => (
+                          <div key={item.id} className="d-flex align-items-center mb-2">
+                            {item.image ? (
+                              <img src={item.image.src} alt={item.title} style={{width: '50px', height: '50px', marginRight: '10px'}} />
+                            ) : (
+                              <div style={{width: '50px', height: '50px', marginRight: '10px', backgroundColor: '#f8f9fa', border: '1px solid #dee2e6', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '10px', color: '#6c757d', textAlign: 'center'}}>
+                                {item.product_id ? 'No Image' : 'Custom Item'}
+                              </div>
+                            )}
+                            <div>
+                              {item.product_url ? (
+                                <a href={item.product_url} target="_blank" rel="noopener noreferrer" style={{textDecoration: 'none', color: '#007bff'}}>
+                                  <strong>{item.title}</strong>
+                                </a>
+                              ) : (
+                                <strong style={{color: item.product_id ? '#6c757d' : '#495057'}}>
+                                  {item.title}
+                                  {!item.product_id && <small className="text-muted ms-1">(Custom Item)</small>}
+                                </strong>
+                              )}
+                              {item.variant_title && <div>Variant: {item.variant_title}</div>}
+                            </div>
                           </div>
-                        </div>
-                      ))}
-                    </div>
-                  ))}
+                        ))}
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             </div>
