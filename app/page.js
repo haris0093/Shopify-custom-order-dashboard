@@ -97,8 +97,8 @@ export default function Home() {
     <div className="container-fluid py-4" style={{ backgroundColor: "#f0f8f0", minHeight: "100vh" }}>
       <h1 className="mb-4 text-center" style={{ color: "#2c3e50", fontWeight: "bold" }}>📊 Shopify Orders Analytics Dashboard</h1>
 
-      {/* Date Filter and Store Selector */}
-      <div className="row mb-4 justify-content-center">
+      {/* Date Filter */}
+      <div className="row justify-content-center mb-4">
         <div className="col-md-8 col-lg-6">
           <div className="card shadow-sm" style={{ borderColor: "#28a745" }}>
             <div className="card-body">
@@ -142,7 +142,47 @@ export default function Home() {
             </div>
           </div>
         </div>
-        <div className="col-md-4 col-lg-3">
+      </div>
+
+      {loading && (
+        <div className="text-center mb-4">
+          <div className="spinner-border text-success" role="status">
+            <span className="visually-hidden">Loading...</span>
+          </div>
+        </div>
+      )}
+
+      {/* Summary Cards */}
+      <div className="row mb-4 g-4">
+        <div className="col-md-4">
+          <div className="card text-white bg-success shadow">
+            <div className="card-body" >
+              <h5 className="card-title">Total Orders</h5>
+              <h2 className="card-text" style={{cursor: selectedStore !== 'all' ? 'pointer' : 'default'}} onClick={handleOrdersClick}>{displayedSummary.totalOrders}</h2>
+            </div>
+          </div>
+        </div>
+        <div className="col-md-4">
+          <div className="card text-white bg-info shadow">
+            <div className="card-body">
+              <h5 className="card-title">Total Revenue</h5>
+              <h2 className="card-text">{formatRevenue(displayedSummary.totalRevenue)}</h2>
+            </div>
+          </div>
+        </div>
+        <div className="col-md-4">
+          <div className="card text-white bg-warning shadow">
+            <div className="card-body">
+              <h5 className="card-title">Orders to Be Fulfilled</h5>
+              <h2 className="card-text">{displayedSummary.ordersToFulfill}</h2>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Store Selector */}
+      <div className="row justify-content-center mb-4">
+        <div className="col-md-6 col-lg-4">
           <div className="card shadow-sm" style={{ borderColor: "#28a745" }}>
             <div className="card-body">
               <h5 className="card-title" style={{ color: "#28a745" }}>Select Store</h5>
