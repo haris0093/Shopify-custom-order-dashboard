@@ -216,8 +216,8 @@ export default function Home() {
                   <th>Fully Refunded Orders</th>
                   <th>Cancelled Orders</th>
                   <th>Revenue</th>
-                  <th>Lost Amount</th>
-                  <th>Net Sales</th>
+                  {/* <th>Lost Amount</th> */}
+                  {/* <th>Net Sales</th> */}
                 </tr>
               </thead>
               <tbody>
@@ -230,8 +230,8 @@ export default function Home() {
                     <td>{store.fullyRefunded}</td>
                     <td>{store.cancelled}</td>
                     <td className="text-success fw-semibold">{formatRevenue(store.revenue)}</td>
-                    <td className="text-danger fw-semibold">{formatRevenue(store.lostAmount || 0)}</td>
-                    <td className="text-primary fw-semibold">{formatRevenue((store.revenue || 0) - (store.lostAmount || 0))}</td>
+                    {/* <td className="text-danger fw-semibold">{formatRevenue(store.lostAmount || 0)}</td> */}
+                    {/* <td className="text-primary fw-semibold">{formatRevenue((store.revenue || 0) - (store.lostAmount || 0))}</td> */}
                   </tr>
                 ))}
               </tbody>
