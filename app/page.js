@@ -13,6 +13,16 @@ export default function Home() {
   const [orders, setOrders] = useState([]);
   const [showModal, setShowModal] = useState(false);
   const [selectedStoreOrders, setSelectedStoreOrders] = useState([]);
+  const [modalType, setModalType] = useState(""); // 'partial_refund' | 'full_refund' | 'cancelled'
+  const [modalStore, setModalStore] = useState("");
+  const [modalOrdersData, setModalOrdersData] = useState([]);
+  const [modalLoading, setModalLoading] = useState(false);
+
+  // Pending filter values (local until Apply Filter clicked)
+  const [pendingRange, setPendingRange] = useState(selectedRange);
+  const [pendingStartDate, setPendingStartDate] = useState(startDate);
+  const [pendingEndDate, setPendingEndDate] = useState(endDate);
+  const [pendingStore, setPendingStore] = useState(selectedStore);
 
   function formatRevenue(value) {
     const num = parseFloat(value);
@@ -20,33 +30,38 @@ export default function Home() {
     return num.toLocaleString('en-US', { style: 'currency', currency: 'USD' });
   }
 
+  // Load default data on first mount only (filters applied later via Apply Filter)
   useEffect(() => {
     loadAnalytics();
-  }, [selectedRange, startDate, endDate]);
+  }, []);
 
   useEffect(() => {
     updateDisplayedSummary();
   }, [selectedStore, summary, storeTable]);
 
-  function getDates() {
+  function getDates(rangeOverride, startOverride, endOverride) {
+    const range = rangeOverride ?? selectedRange;
+    const startDateVal = startOverride ?? startDate;
+    const endDateVal = endOverride ?? endDate;
+
     const now = new Date();
     let start, end = now;
 
-    if (selectedRange === "today") {
+    if (range === "today") {
       start = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    } else if (selectedRange === "thisWeek") {
+    } else if (range === "thisWeek") {
       start = new Date(now);
       start.setDate(now.getDate() - 7);
-    } else if (selectedRange === "thisMonth") {
+    } else if (range === "thisMonth") {
       start = new Date(now.getFullYear(), now.getMonth(), 1);
-    } else if (selectedRange === "thisYear") {
+    } else if (range === "thisYear") {
       start = new Date(now.getFullYear(), 0, 1);
-    } else if (selectedRange === "last30") {
+    } else if (range === "last30") {
       start = new Date(now);
       start.setDate(now.getDate() - 30);
-    } else if (selectedRange === "custom" && startDate && endDate) {
-      start = new Date(startDate);
-      end = new Date(endDate);
+    } else if (range === "custom" && startDateVal && endDateVal) {
+      start = new Date(startDateVal);
+      end = new Date(endDateVal);
     } else {
       // Default to last 30
       start = new Date(now);
@@ -73,14 +88,59 @@ export default function Home() {
 
   function handleOrdersClick() {
     if (selectedStore === "all") return;
-    const storeOrders = orders.filter(order => order.store_name === selectedStore);
-    setSelectedStoreOrders(storeOrders);
-    setShowModal(true);
+    // Open the reusable modal showing all orders for the selected store
+    handleOpenModal(selectedStore, 'orders');
   }
 
-  async function loadAnalytics() {
+  function formatDate(dateStr) {
+    if (!dateStr) return "N/A";
+    const d = new Date(dateStr);
+    return d.toLocaleString();
+  }
+
+  function computeRefundAmount(order) {
+    if (!order) return 0;
+    if (order.total_refunded) return parseFloat(order.total_refunded) || 0;
+    if (order.refunds && order.refunds.length) {
+      const total = order.refunds.reduce((sum, r) => {
+        if (r.transactions && r.transactions.length) {
+          return sum + r.transactions.reduce((s, t) => s + (parseFloat(t.amount || 0) || 0), 0);
+        } else if (r.amount) {
+          return sum + parseFloat(r.amount || 0);
+        }
+        return sum;
+      }, 0);
+      return total;
+    }
+    return 0;
+  }
+
+  function handleOpenModal(storeName, type) {
+    setModalType(type);
+    setModalStore(storeName);
+    setShowModal(true);
+    setModalLoading(true);
+    // Simulate a small fetch/delay while filtering
+    setTimeout(() => {
+      let filtered = orders.filter(o => o.store_name === storeName);
+      if (type === 'partial_refund') {
+        filtered = filtered.filter(o => o.financial_status === 'partially_refunded');
+      } else if (type === 'full_refund') {
+        filtered = filtered.filter(o => o.financial_status === 'refunded');
+      } else if (type === 'cancelled') {
+        filtered = filtered.filter(o => o.cancelled_at || o.cancelled || o.cancel_reason);
+      } else if (type === 'fulfilled') {
+        // orders with fulfillment records or overall fulfilled status
+        filtered = filtered.filter(o => o.fulfillment_status === 'fulfilled' || (o.fulfillments && o.fulfillments.length > 0));
+      }
+      setModalOrdersData(filtered);
+      setModalLoading(false);
+    }, 150);
+  }
+
+  async function loadAnalytics({ range, start: sDate, end: eDate } = {}) {
     setLoading(true);
-    const { start, end } = getDates();
+    const { start, end } = getDates(range, sDate, eDate);
     try {
       const res = await fetch(`/api/analytics?start_date=${start}&end_date=${end}`);
       const data = await res.json();
@@ -91,6 +151,40 @@ export default function Home() {
       console.error("Failed to load analytics:", err);
     }
     setLoading(false);
+  }
+
+  function applyFilters() {
+    if (loading) return;
+    const changed = pendingRange !== selectedRange || pendingStartDate !== startDate || pendingEndDate !== endDate || pendingStore !== selectedStore;
+    if (!changed) return;
+
+    // Update applied filters (for UI and summary) and fetch with the pending values
+    setSelectedRange(pendingRange);
+    setStartDate(pendingStartDate);
+    setEndDate(pendingEndDate);
+    setSelectedStore(pendingStore);
+
+    loadAnalytics({ range: pendingRange, start: pendingStartDate, end: pendingEndDate });
+  }
+
+  function resetFilters() {
+    if (loading) return;
+    const defaultRange = 'last30';
+    const defaultStart = '';
+    const defaultEnd = '';
+    const defaultStore = 'all';
+
+    setPendingRange(defaultRange);
+    setPendingStartDate(defaultStart);
+    setPendingEndDate(defaultEnd);
+    setPendingStore(defaultStore);
+
+    setSelectedRange(defaultRange);
+    setStartDate(defaultStart);
+    setEndDate(defaultEnd);
+    setSelectedStore(defaultStore);
+
+    loadAnalytics();
   }
 
   return (
@@ -107,8 +201,8 @@ export default function Home() {
                 <div className="col-md-6">
                   <select
                     className="form-select"
-                    value={selectedRange}
-                    onChange={(e) => setSelectedRange(e.target.value)}
+                    value={pendingRange}
+                    onChange={(e) => setPendingRange(e.target.value)}
                   >
                     <option value="today">Today</option>
                     <option value="thisWeek">This Week</option>
@@ -118,22 +212,22 @@ export default function Home() {
                     <option value="custom">Custom Date Range</option>
                   </select>
                 </div>
-                {selectedRange === "custom" && (
+                {pendingRange === "custom" && (
                   <>
                     <div className="col-md-3">
                       <input
                         type="date"
                         className="form-control"
-                        value={startDate}
-                        onChange={(e) => setStartDate(e.target.value)}
+                        value={pendingStartDate}
+                        onChange={(e) => setPendingStartDate(e.target.value)}
                       />
                     </div>
                     <div className="col-md-3">
                       <input
                         type="date"
                         className="form-control"
-                        value={endDate}
-                        onChange={(e) => setEndDate(e.target.value)}
+                        value={pendingEndDate}
+                        onChange={(e) => setPendingEndDate(e.target.value)}
                       />
                     </div>
                   </>
@@ -149,8 +243,8 @@ export default function Home() {
               <h5 className="card-title" style={{ color: "#28a745" }}>Select Store</h5>
               <select
                 className="form-select"
-                value={selectedStore}
-                onChange={(e) => setSelectedStore(e.target.value)}
+                value={pendingStore}
+                onChange={(e) => setPendingStore(e.target.value)}
               >
                 <option value="all">All Stores</option>
                 {storeTable.map((store, index) => (
@@ -158,6 +252,18 @@ export default function Home() {
                 ))}
               </select>
             </div>
+          </div>
+        </div>
+
+        {/* Apply/Reset Buttons */}
+        <div className="col-md-12 col-lg-2 d-flex align-items-center">
+          <div>
+            <button className="btn btn-success me-2" onClick={() => applyFilters()} disabled={loading || !(pendingRange !== selectedRange || pendingStartDate !== startDate || pendingEndDate !== endDate || pendingStore !== selectedStore)}>
+              {loading ? 'Applying...' : 'Apply Filter'}
+            </button>
+            <button className="btn btn-outline-secondary" onClick={() => resetFilters()} disabled={loading}>
+              Reset Filters
+            </button>
           </div>
         </div>
       </div>
@@ -171,76 +277,114 @@ export default function Home() {
         </div>
       )}
 
-      {/* Summary Cards */}
-      <div className="row mb-4 g-4">
-        <div className="col-md-4">
-          <div className="card text-white bg-success shadow">
-            <div className="card-body" >
-              <h5 className="card-title">Total Orders</h5>
-              <h2 className="card-text" style={{cursor: selectedStore !== 'all' ? 'pointer' : 'default'}} onClick={handleOrdersClick}>{displayedSummary.totalOrders}</h2>
+      {/* Store-wise table on the left, Summary cards on the right */}
+      <div className="row mb-4 g-4" id="store_data_summary">
+        <div className="col-12 col-lg-2">
+          <div className="d-grid gap-3" id="order_analytics_column">
+            <div className="card text-white bg-success shadow">
+              <div className="card-body OrderAnalyticsCardBodyBox" >
+                <h5 className="card-title">Total Orders</h5>
+                <h2 className="card-text" style={{cursor: selectedStore !== 'all' ? 'pointer' : 'default'}} onClick={handleOrdersClick}>{displayedSummary.totalOrders}</h2>
+              </div>
+            </div>
+            <div className="card text-white bg-info shadow">
+              <div className="card-body OrderAnalyticsCardBodyBox">
+                <h5 className="card-title">Total Revenue</h5>
+                <h2 className="card-text">{formatRevenue(displayedSummary.totalRevenue)}</h2>
+              </div>
+            </div>
+            <div className="card text-white bg-warning shadow">
+              <div className="card-body OrderAnalyticsCardBodyBox">
+                <h5 className="card-title">Orders to Be Fulfilled</h5>
+                <h2 className="card-text">{displayedSummary.ordersToFulfill}</h2>
+              </div>
             </div>
           </div>
         </div>
-        <div className="col-md-4">
-          <div className="card text-white bg-info shadow">
-            <div className="card-body">
-              <h5 className="card-title">Total Revenue</h5>
-              <h2 className="card-text">{formatRevenue(displayedSummary.totalRevenue)}</h2>
+        <div className="col-12 col-lg-10">
+          <div className="card shadow" style={{ borderColor: "#28a745" }} id="table_filterd">
+            <div className="card-header" style={{ backgroundColor: "#d4edda", color: "#155724" }}>
+              <h5 className="mb-0">Store / Brand-Wise Analytics</h5>
             </div>
-          </div>
-        </div>
-        <div className="col-md-4">
-          <div className="card text-white bg-warning shadow">
             <div className="card-body">
-              <h5 className="card-title">Orders to Be Fulfilled</h5>
-              <h2 className="card-text">{displayedSummary.ordersToFulfill}</h2>
+              <div className="table-responsive">
+                <table className="table table-striped table-hover">
+                  <thead style={{ backgroundColor: "#28a745", color: "white" }}>
+                    <tr>
+                      <th>Brand</th>
+                      <th>Orders</th>
+                      <th>Fulfilled Orders</th>
+                      <th>Partially Refunded Orders</th>
+                      <th>Fully Refunded Orders</th>
+                      <th>Cancelled Orders</th>
+                      <th>Revenue</th>
+                       <th>Amount Refunded</th>
+                       <th>Net Sales</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {storeTable.map((store, index) => (
+                      <tr key={index}>
+                        <td className="fw-bold">{store.brand}</td>
+                        <td>
+                          {store.totalOrders > 0 ? (
+                            <button className="btn btn-link p-0 text-decoration-none" onClick={() => handleOpenModal(store.brand, 'orders')}>
+                              {store.totalOrders}
+                            </button>
+                          ) : (
+                            <span>{store.totalOrders}</span>
+                          )}
+                        </td>
+                        <td>
+                          {store.fulfilled > 0 ? (
+                            <button className="btn btn-link p-0 text-decoration-none" onClick={() => handleOpenModal(store.brand, 'fulfilled')}>
+                              {store.fulfilled}
+                            </button>
+                          ) : (
+                            <span>{store.fulfilled}</span>
+                          )}
+                        </td>
+                        <td>
+                          {store.partiallyRefunded > 0 ? (
+                            <button className="btn btn-link p-0 text-decoration-none" onClick={() => handleOpenModal(store.brand, 'partial_refund')}>
+                              {store.partiallyRefunded}
+                            </button>
+                          ) : (
+                            <span>{store.partiallyRefunded}</span>
+                          )}
+                        </td>
+                        <td>
+                          {store.fullyRefunded > 0 ? (
+                            <button className="btn btn-link p-0 text-decoration-none" onClick={() => handleOpenModal(store.brand, 'full_refund')}>
+                              {store.fullyRefunded}
+                            </button>
+                          ) : (
+                            <span>{store.fullyRefunded}</span>
+                          )}
+                        </td>
+                        <td>
+                          {store.cancelled > 0 ? (
+                            <button className="btn btn-link p-0 text-decoration-none text-danger" onClick={() => handleOpenModal(store.brand, 'cancelled')}>
+                              {store.cancelled}
+                            </button>
+                          ) : (
+                            <span>{store.cancelled}</span>
+                          )}
+                        </td>
+                        <td className="text-success fw-semibold">{formatRevenue(store.revenue)}</td>
+                         <td className="text-danger fw-semibold">{formatRevenue(store.lostAmount || 0)}</td>
+                        <td className="text-primary fw-semibold">{formatRevenue((store.revenue || 0) - (store.lostAmount || 0))}</td>
+                      </tr> 
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </div>
           </div>
         </div>
       </div>
 
-      {/* Store-wise Table */}
-      <div className="card shadow" style={{ borderColor: "#28a745" }}>
-        <div className="card-header" style={{ backgroundColor: "#d4edda", color: "#155724" }}>
-          <h5 className="mb-0">Store / Brand-Wise Analytics</h5>
-        </div>
-        <div className="card-body">
-          <div className="table-responsive">
-            <table className="table table-striped table-hover">
-              <thead style={{ backgroundColor: "#28a745", color: "white" }}>
-                <tr>
-                  <th>Brand</th>
-                  <th>Orders</th>
-                  <th>Fulfilled Orders</th>
-                  <th>Partially Refunded Orders</th>
-                  <th>Fully Refunded Orders</th>
-                  <th>Cancelled Orders</th>
-                  <th>Revenue</th>
-                   <th>Lost Amount</th>
-                   <th>Net Sales</th>
-                </tr>
-              </thead>
-              <tbody>
-                {storeTable.map((store, index) => (
-                  <tr key={index}>
-                    <td className="fw-bold">{store.brand}</td>
-                    <td>{store.totalOrders}</td>
-                    <td>{store.fulfilled}</td>
-                    <td>{store.partiallyRefunded}</td>
-                    <td>{store.fullyRefunded}</td>
-                    <td>{store.cancelled}</td>
-                    <td className="text-success fw-semibold">{formatRevenue(store.revenue)}</td>
-                     <td className="text-danger fw-semibold">{formatRevenue(store.lostAmount || 0)}</td>
-                    <td className="text-primary fw-semibold">{formatRevenue((store.revenue || 0) - (store.lostAmount || 0))}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      </div>
-
-      {/* Orders Modal */}
+      {/* Orders Modal (Reusable) */}
       {showModal && (
         <>
           <div className="modal-backdrop fade show" onClick={() => setShowModal(false)}></div>
@@ -248,48 +392,69 @@ export default function Home() {
             <div className="modal-dialog modal-lg">
               <div className="modal-content">
                 <div className="modal-header">
-                  <h5 className="modal-title">Orders for {selectedStore}</h5>
+                  <h5 className="modal-title">{modalType === 'partial_refund' ? 'Partially Refunded Orders' : modalType === 'full_refund' ? 'Fully Refunded Orders' : modalType === 'cancelled' ? 'Cancelled Orders' : modalType === 'fulfilled' ? 'Fulfilled Orders' : 'Orders'} for {modalStore}</h5>
                   <button type="button" className="btn-close" onClick={() => setShowModal(false)}></button>
                 </div>
                 <div className="modal-body" style={{maxHeight: '70vh', overflowY: 'auto'}}>
-                  {selectedStoreOrders.map(order => {
-                    return (
-                      <div key={order.id} className="mb-3 p-3 border rounded">
-                        <h6>
-                          Order ID: {order.name}
-                          {order.cancelled_at && <span className="badge bg-danger ms-2">Cancelled Order</span>}
-                          {order.financial_status === 'partially_refunded' && (
-                            <span className="badge bg-warning ms-2">Partially Refunded</span>
-                          )}
-                          {order.financial_status === 'refunded' && <span className="badge bg-secondary ms-2">Fully Refunded</span>}
-                        </h6>
-                        {order.line_items && order.line_items.map(item => (
-                          <div key={item.id} className="d-flex align-items-center mb-2">
-                            {item.image ? (
-                              <img src={item.image.src} alt={item.title} style={{width: '50px', height: '50px', marginRight: '10px'}} />
-                            ) : (
-                              <div style={{width: '50px', height: '50px', marginRight: '10px', backgroundColor: '#f8f9fa', border: '1px solid #dee2e6', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '10px', color: '#6c757d', textAlign: 'center'}}>
-                                {item.product_id ? 'No Image' : 'Custom Item'}
-                              </div>
-                            )}
-                            <div>
-                              {item.product_url ? (
-                                <a href={item.product_url} target="_blank" rel="noopener noreferrer" style={{textDecoration: 'none', color: '#007bff'}}>
-                                  <strong>{item.title}</strong>
-                                </a>
-                              ) : (
-                                <strong style={{color: item.product_id ? '#6c757d' : '#495057'}}>
-                                  {item.title}
-                                  {!item.product_id && <small className="text-muted ms-1">(Custom Item)</small>}
-                                </strong>
-                              )}
-                              {item.variant_title && <div>Variant: {item.variant_title}</div>}
-                            </div>
-                          </div>
-                        ))}
+                  {modalLoading ? (
+                    <div className="text-center py-4">
+                      <div className="spinner-border text-success" role="status">
+                        <span className="visually-hidden">Loading...</span>
                       </div>
-                    );
-                  })}
+                    </div>
+                  ) : modalOrdersData.length === 0 ? (
+                    <div className="text-center py-4 text-muted">No records found for this selection.</div>
+                  ) : (
+                    modalOrdersData.map(order => (
+                      <div key={order.id} className="mb-3 p-3 border rounded">
+                        <div className="d-flex justify-content-between align-items-start">
+                          <div>
+                            <h6><b>Order ID: {order.name}</b></h6>
+                            <div className="text-muted">Date: {formatDate(order.created_at || order.processed_at || order.updated_at)}</div>
+                          </div>
+                          <div className="text-end">
+                            {(modalType === 'partial_refund' || modalType === 'full_refund') && (
+                              <div><strong>Refunded:</strong> {formatRevenue(computeRefundAmount(order) || 0)}</div>
+                            )}
+                            {modalType === 'cancelled' && (
+                              <div><strong>Cancellation Reason:</strong> {order.cancel_reason || order.cancel_reason || 'N/A'}</div>
+                            )}
+                          </div>
+                        </div>
+
+                        <div>
+                          {(() => {
+                            const displayItems = (modalType === 'fulfilled' && order.line_items) ? order.line_items.filter(i => i.fulfillment_status === 'fulfilled') : (order.line_items || []);
+                            if (modalType === 'fulfilled' && displayItems.length === 0) {
+                              return <div className="text-muted">No fulfilled products for this order.</div>;
+                            }
+                            return displayItems.map(item => (
+                              <div key={item.id} className="d-flex gap-2 align-items-center mt-2">
+                                {item.image ? (
+                                  <img src={item.image.src} alt={item.title} style={{width: '50px', height: '50px', objectFit: 'cover', borderRadius: '4px'}} />
+                                ) : (
+                                  <div style={{width: '50px', height: '50px', backgroundColor: '#f8f9fa', border: '1px solid #dee2e6', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '10px', color: '#6c757d'}}>
+                                    No Image
+                                  </div>
+                                )}
+                                <div>
+                                  {item.product_url ? (
+                                    <a href={item.product_url} target="_blank" rel="noopener noreferrer" style={{textDecoration: 'none', color: '#007bff'}}>
+                                      <strong>{item.title}</strong>
+                                    </a>
+                                  ) : (
+                                    <strong>{item.title}</strong>
+                                  )}
+                                  <div className="text-muted">x {item.quantity} {item.variant_title && <span>Variant: {item.variant_title}</span>}</div>
+                                </div>
+                              </div>
+                            ));
+                          })()}
+                        </div>
+
+                      </div>
+                    ))
+                  )}
                 </div>
               </div>
             </div>
