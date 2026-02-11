@@ -80,7 +80,8 @@ export default function Home() {
         setDisplayedSummary({
           totalOrders: store.totalOrders,
           totalRevenue: store.revenue,
-          ordersToFulfill: store.totalOrders - store.fulfilled
+          // prefer the server-provided per-store ordersToFulfill, fallback to a safe calculation
+          ordersToFulfill: (typeof store.ordersToFulfill !== 'undefined') ? store.ordersToFulfill : Math.max(0, store.totalOrders - store.fulfilled)
         });
       }
     }
@@ -90,6 +91,12 @@ export default function Home() {
     if (selectedStore === "all") return;
     // Open the reusable modal showing all orders for the selected store
     handleOpenModal(selectedStore, 'orders');
+  }
+
+  function handleUnfulfilledOrdersClick() {
+    if (selectedStore === "all") return;
+    // Open the modal showing only unfulfilled active orders for the selected store
+    handleOpenModal(selectedStore, 'unfulfilled');
   }
 
   function formatDate(dateStr) {
@@ -115,6 +122,14 @@ export default function Home() {
     return 0;
   }
 
+  function isActiveOrder(order) {
+    const isCancelled = !!order.cancelled_at;
+    const isPartiallyRefunded = order.financial_status === 'partially_refunded';
+    const isFullyRefunded = order.financial_status === 'refunded';
+    const isPaid = order.financial_status === 'paid';
+    return isPaid && !isCancelled && !isPartiallyRefunded && !isFullyRefunded;
+  }
+
   function handleOpenModal(storeName, type) {
     setModalType(type);
     setModalStore(storeName);
@@ -130,8 +145,11 @@ export default function Home() {
       } else if (type === 'cancelled') {
         filtered = filtered.filter(o => o.cancelled_at || o.cancelled || o.cancel_reason);
       } else if (type === 'fulfilled') {
-        // orders with fulfillment records or overall fulfilled status
-        filtered = filtered.filter(o => o.fulfillment_status === 'fulfilled' || (o.fulfillments && o.fulfillments.length > 0));
+        // Orders with fulfillment status 'fulfilled' AND that are active (not refunded or cancelled)
+        filtered = filtered.filter(o => (o.fulfillment_status === 'fulfilled' || (o.fulfillments && o.fulfillments.length > 0)) && isActiveOrder(o));
+      } else if (type === 'unfulfilled') {
+        // Orders with fulfillment status NOT 'fulfilled' AND that are active (not refunded or cancelled)
+        filtered = filtered.filter(o => o.fulfillment_status !== 'fulfilled' && isActiveOrder(o));
       }
       setModalOrdersData(filtered);
       setModalLoading(false);
@@ -277,109 +295,111 @@ export default function Home() {
         </div>
       )}
 
-      {/* Store-wise table on the left, Summary cards on the right */}
-      <div className="row mb-4 g-4" id="store_data_summary">
-        <div className="col-12 col-lg-2">
-          <div className="d-grid gap-3" id="order_analytics_column">
-            <div className="card text-white bg-success shadow">
-              <div className="card-body OrderAnalyticsCardBodyBox" >
-                <h5 className="card-title">Total Orders</h5>
-                <h2 className="card-text" style={{cursor: selectedStore !== 'all' ? 'pointer' : 'default'}} onClick={handleOrdersClick}>{displayedSummary.totalOrders}</h2>
-              </div>
-            </div>
-            <div className="card text-white bg-info shadow">
-              <div className="card-body OrderAnalyticsCardBodyBox">
-                <h5 className="card-title">Total Revenue</h5>
-                <h2 className="card-text">{formatRevenue(displayedSummary.totalRevenue)}</h2>
-              </div>
-            </div>
-            <div className="card text-white bg-warning shadow">
-              <div className="card-body OrderAnalyticsCardBodyBox">
-                <h5 className="card-title">Orders to Be Fulfilled</h5>
-                <h2 className="card-text">{displayedSummary.ordersToFulfill}</h2>
-              </div>
+      {/* Summary Cards */}
+      <div className="row mb-4 g-4">
+        <div className="col-md-4">
+          <div className="card text-white bg-success shadow">
+            <div className="card-body" >
+              <h5 className="card-title">Total Orders</h5>
+              <h2 className="card-text" style={{cursor: selectedStore !== 'all' ? 'pointer' : 'default'}} onClick={handleOrdersClick}>{displayedSummary.totalOrders}</h2>
             </div>
           </div>
         </div>
-        <div className="col-12 col-lg-10">
-          <div className="card shadow" style={{ borderColor: "#28a745" }} id="table_filterd">
-            <div className="card-header" style={{ backgroundColor: "#d4edda", color: "#155724" }}>
-              <h5 className="mb-0">Store / Brand-Wise Analytics</h5>
-            </div>
+        <div className="col-md-4">
+          <div className="card text-white bg-info shadow">
             <div className="card-body">
-              <div className="table-responsive">
-                <table className="table table-striped table-hover">
-                  <thead style={{ backgroundColor: "#28a745", color: "white" }}>
-                    <tr>
-                      <th>Brand</th>
-                      <th>Orders</th>
-                      <th>Fulfilled Orders</th>
-                      <th>Partially Refunded Orders</th>
-                      <th>Fully Refunded Orders</th>
-                      <th>Cancelled Orders</th>
-                      <th>Revenue</th>
-                       <th>Amount Refunded</th>
-                       <th>Net Sales</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {storeTable.map((store, index) => (
-                      <tr key={index}>
-                        <td className="fw-bold">{store.brand}</td>
-                        <td>
-                          {store.totalOrders > 0 ? (
-                            <button className="btn btn-link p-0 text-decoration-none" onClick={() => handleOpenModal(store.brand, 'orders')}>
-                              {store.totalOrders}
-                            </button>
-                          ) : (
-                            <span>{store.totalOrders}</span>
-                          )}
-                        </td>
-                        <td>
-                          {store.fulfilled > 0 ? (
-                            <button className="btn btn-link p-0 text-decoration-none" onClick={() => handleOpenModal(store.brand, 'fulfilled')}>
-                              {store.fulfilled}
-                            </button>
-                          ) : (
-                            <span>{store.fulfilled}</span>
-                          )}
-                        </td>
-                        <td>
-                          {store.partiallyRefunded > 0 ? (
-                            <button className="btn btn-link p-0 text-decoration-none" onClick={() => handleOpenModal(store.brand, 'partial_refund')}>
-                              {store.partiallyRefunded}
-                            </button>
-                          ) : (
-                            <span>{store.partiallyRefunded}</span>
-                          )}
-                        </td>
-                        <td>
-                          {store.fullyRefunded > 0 ? (
-                            <button className="btn btn-link p-0 text-decoration-none" onClick={() => handleOpenModal(store.brand, 'full_refund')}>
-                              {store.fullyRefunded}
-                            </button>
-                          ) : (
-                            <span>{store.fullyRefunded}</span>
-                          )}
-                        </td>
-                        <td>
-                          {store.cancelled > 0 ? (
-                            <button className="btn btn-link p-0 text-decoration-none text-danger" onClick={() => handleOpenModal(store.brand, 'cancelled')}>
-                              {store.cancelled}
-                            </button>
-                          ) : (
-                            <span>{store.cancelled}</span>
-                          )}
-                        </td>
-                        <td className="text-success fw-semibold">{formatRevenue(store.revenue)}</td>
-                         <td className="text-danger fw-semibold">{formatRevenue(store.lostAmount || 0)}</td>
-                        <td className="text-primary fw-semibold">{formatRevenue((store.revenue || 0) - (store.lostAmount || 0))}</td>
-                      </tr> 
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+              <h5 className="card-title">Total Revenue</h5>
+              <h2 className="card-text">{formatRevenue(displayedSummary.totalRevenue)}</h2>
             </div>
+          </div>
+        </div>
+        <div className="col-md-4">
+          <div className="card text-white bg-warning shadow">
+            <div className="card-body">
+              <h5 className="card-title">Orders to Be Fulfilled</h5>
+              <h2 className="card-text" style={{cursor: selectedStore !== 'all' ? 'pointer' : 'default'}} onClick={handleUnfulfilledOrdersClick}>{displayedSummary.ordersToFulfill}</h2>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Store-wise Table */}
+      <div className="card shadow" style={{ borderColor: "#28a745" }} id="table_filterd">
+        <div className="card-header" style={{ backgroundColor: "#d4edda", color: "#155724" }}>
+          <h5 className="mb-0">Store / Brand-Wise Analytics</h5>
+        </div>
+        <div className="card-body">
+          <div className="table-responsive">
+            <table className="table table-striped table-hover">
+              <thead style={{ backgroundColor: "#28a745", color: "white" }}>
+                <tr>
+                  <th>Brand</th>
+                  <th>Orders</th>
+                  <th>Fulfilled Orders</th>
+                  <th>Partially Refunded Orders</th>
+                  <th>Fully Refunded Orders</th>
+                  <th>Cancelled Orders</th>
+                  <th>Revenue</th>
+                   <th>Amount Refunded</th>
+                   <th>Net Sales</th>
+                </tr>
+              </thead>
+              <tbody>
+                {storeTable.map((store, index) => (
+                  <tr key={index}>
+                    <td className="fw-bold">{store.brand}</td>
+                    <td>
+                      {store.totalOrders > 0 ? (
+                        <button className="btn btn-link p-0 text-decoration-none" onClick={() => handleOpenModal(store.brand, 'orders')}>
+                          {store.totalOrders}
+                        </button>
+                      ) : (
+                        <span>{store.totalOrders}</span>
+                      )}
+                    </td>
+                    <td>
+                      {store.fulfilled > 0 ? (
+                        <button className="btn btn-link p-0 text-decoration-none" onClick={() => handleOpenModal(store.brand, 'fulfilled')}>
+                          {store.fulfilled}
+                        </button>
+                      ) : (
+                        <span>{store.fulfilled}</span>
+                      )}
+                    </td>
+                    <td>
+                      {store.partiallyRefunded > 0 ? (
+                        <button className="btn btn-link p-0 text-decoration-none" onClick={() => handleOpenModal(store.brand, 'partial_refund')}>
+                          {store.partiallyRefunded}
+                        </button>
+                      ) : (
+                        <span>{store.partiallyRefunded}</span>
+                      )}
+                    </td>
+                    <td>
+                      {store.fullyRefunded > 0 ? (
+                        <button className="btn btn-link p-0 text-decoration-none" onClick={() => handleOpenModal(store.brand, 'full_refund')}>
+                          {store.fullyRefunded}
+                        </button>
+                      ) : (
+                        <span>{store.fullyRefunded}</span>
+                      )}
+                    </td>
+                    <td>
+                      {store.cancelled > 0 ? (
+                        <button className="btn btn-link p-0 text-decoration-none text-danger" onClick={() => handleOpenModal(store.brand, 'cancelled')}>
+                          {store.cancelled}
+                        </button>
+                      ) : (
+                        <span>{store.cancelled}</span>
+                      )}
+                    </td>
+                    <td className="text-success fw-semibold">{formatRevenue(store.revenue)}</td>
+                     <td className="text-danger fw-semibold">{formatRevenue(store.lostAmount || 0)}</td>
+                    <td className="text-primary fw-semibold">{formatRevenue((store.revenue || 0) - (store.lostAmount || 0))}</td>
+                  </tr> 
+                ))}
+              </tbody>
+            </table>
           </div>
         </div>
       </div>
@@ -392,7 +412,7 @@ export default function Home() {
             <div className="modal-dialog modal-lg">
               <div className="modal-content">
                 <div className="modal-header">
-                  <h5 className="modal-title">{modalType === 'partial_refund' ? 'Partially Refunded Orders' : modalType === 'full_refund' ? 'Fully Refunded Orders' : modalType === 'cancelled' ? 'Cancelled Orders' : modalType === 'fulfilled' ? 'Fulfilled Orders' : 'Orders'} for {modalStore}</h5>
+                  <h5 className="modal-title">{modalType === 'partial_refund' ? 'Partially Refunded Orders' : modalType === 'full_refund' ? 'Fully Refunded Orders' : modalType === 'cancelled' ? 'Cancelled Orders' : modalType === 'fulfilled' ? 'Fulfilled Orders' : modalType === 'unfulfilled' ? 'Orders to Be Fulfilled' : 'Orders'} for {modalStore}</h5>
                   <button type="button" className="btn-close" onClick={() => setShowModal(false)}></button>
                 </div>
                 <div className="modal-body" style={{maxHeight: '70vh', overflowY: 'auto'}}>
@@ -424,9 +444,17 @@ export default function Home() {
 
                         <div>
                           {(() => {
-                            const displayItems = (modalType === 'fulfilled' && order.line_items) ? order.line_items.filter(i => i.fulfillment_status === 'fulfilled') : (order.line_items || []);
-                            if (modalType === 'fulfilled' && displayItems.length === 0) {
-                              return <div className="text-muted">No fulfilled products for this order.</div>;
+                            let displayItems = [];
+                            if (modalType === 'fulfilled' && order.line_items) {
+                              displayItems = order.line_items.filter(i => i.fulfillment_status === 'fulfilled');
+                            } else if (modalType === 'unfulfilled' && order.line_items) {
+                              displayItems = order.line_items.filter(i => i.fulfillment_status !== 'fulfilled');
+                            } else {
+                              displayItems = order.line_items || [];
+                            }
+
+                            if ((modalType === 'fulfilled' || modalType === 'unfulfilled') && displayItems.length === 0) {
+                              return <div className="text-muted">No {modalType === 'fulfilled' ? 'fulfilled' : 'unfulfilled'} products for this order.</div>;
                             }
                             return displayItems.map(item => (
                               <div key={item.id} className="d-flex gap-2 align-items-center mt-2">

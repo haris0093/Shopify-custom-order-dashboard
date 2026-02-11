@@ -206,10 +206,20 @@ export async function GET(request) {
     });
   });
 
+  // Helper function to determine if an order is "active" (paid, not refunded and not cancelled)
+  function isActiveOrder(order) {
+    const isCancelled = !!order.cancelled_at;
+    const isPartiallyRefunded = order.financial_status === 'partially_refunded';
+    const isFullyRefunded = order.financial_status === 'refunded';
+    const isPaid = order.financial_status === 'paid';
+    return isPaid && !isCancelled && !isPartiallyRefunded && !isFullyRefunded;
+  }
+
   // Now compute aggregates
   const totalOrders = allData.length;
   const totalRevenue = allData.reduce((sum, o) => sum + parseFloat(o.total_price || 0), 0);
-  const ordersToFulfill = allData.filter(o => o.fulfillment_status !== 'fulfilled').length;
+  // ordersToFulfill: only count active unfulfilled orders
+  const ordersToFulfill = allData.filter(o => o.fulfillment_status !== 'fulfilled' && isActiveOrder(o)).length;
 
   // Group by store
   const storeStats = {};
@@ -218,6 +228,7 @@ export async function GET(request) {
       brand: store.name,
       totalOrders: 0,
       fulfilled: 0,
+      ordersToFulfill: 0,
       partiallyRefunded: 0,
       fullyRefunded: 0,
       cancelled: 0,
@@ -230,7 +241,14 @@ export async function GET(request) {
     const stat = storeStats[order.store_id];
     const orderAmount = parseFloat(order.total_price || 0);
     stat.totalOrders++;
-    if (order.fulfillment_status === 'fulfilled') stat.fulfilled++;
+    // Only count as fulfilled if it's an active order
+    if (order.fulfillment_status === 'fulfilled' && isActiveOrder(order)) {
+      stat.fulfilled++;
+    }
+    // Per-store "to be fulfilled" should only include active, unfulfilled orders
+    if (order.fulfillment_status !== 'fulfilled' && isActiveOrder(order)) {
+      stat.ordersToFulfill++;
+    }
     if (order.financial_status === 'partially_refunded') {
       stat.partiallyRefunded++;
       stat.lostAmount += orderAmount; // Add partially refunded amount to lost amount
