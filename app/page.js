@@ -18,6 +18,12 @@ export default function Home() {
   const [modalOrdersData, setModalOrdersData] = useState([]);
   const [modalLoading, setModalLoading] = useState(false);
 
+  // Simple client-side auth to protect the dashboard until correct credentials entered
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [loginEmail, setLoginEmail] = useState("");
+  const [loginPassword, setLoginPassword] = useState("");
+  const [loginError, setLoginError] = useState("");
+
   // Pending filter values (local until Apply Filter clicked)
   const [pendingRange, setPendingRange] = useState(selectedRange);
   const [pendingStartDate, setPendingStartDate] = useState(startDate);
@@ -30,10 +36,12 @@ export default function Home() {
     return num.toLocaleString('en-US', { style: 'currency', currency: 'USD' });
   }
 
-  // Load default data on first mount only (filters applied later via Apply Filter)
+  // Load analytics only after successful authentication
   useEffect(() => {
-    loadAnalytics();
-  }, []);
+    if (isAuthenticated) {
+      loadAnalytics();
+    }
+  }, [isAuthenticated]);
 
   useEffect(() => {
     updateDisplayedSummary();
@@ -91,6 +99,17 @@ export default function Home() {
     if (selectedStore === "all") return;
     // Open the reusable modal showing all orders for the selected store
     handleOpenModal(selectedStore, 'orders');
+  }
+
+  function handleLoginSubmit(e) {
+    e.preventDefault();
+    // Strict credential check
+    if (loginEmail === 'haris@arcinventador.com' && loginPassword === 'autelecom123') {
+      setLoginError("");
+      setIsAuthenticated(true);
+    } else {
+      setLoginError('Invalid email or password');
+    }
   }
 
   function handleUnfulfilledOrdersClick() {
@@ -205,8 +224,37 @@ export default function Home() {
     loadAnalytics();
   }
 
+  const contentStyle = !isAuthenticated ? { filter: 'blur(6px)', pointerEvents: 'none', userSelect: 'none' } : {};
+
   return (
-    <div className="container-fluid py-4" style={{ backgroundColor: "#f0f8f0", minHeight: "100vh" }}>
+    <>
+      {/* Login modal - blocks access until authenticated */}
+      {!isAuthenticated && (
+        <>
+          <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.6)', zIndex: 2000 }}></div>
+          <div style={{ position: 'fixed', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 2010 }}>
+            <div className="card p-4 shadow" style={{ width: 380 }}>
+              <h5 className="mb-3">CRM Login</h5>
+              <form onSubmit={handleLoginSubmit}>
+                <div className="mb-2">
+                  <label className="form-label">Email</label>
+                  <input autoFocus type="email" className="form-control" value={loginEmail} onChange={(e) => setLoginEmail(e.target.value)} />
+                </div>
+                <div className="mb-3">
+                  <label className="form-label">Password</label>
+                  <input type="password" className="form-control" value={loginPassword} onChange={(e) => setLoginPassword(e.target.value)} />
+                </div>
+                {loginError && <div className="text-danger mb-3">{loginError}</div>}
+                <div className="d-flex justify-content-end">
+                  <button className="btn btn-primary" type="submit">Login</button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </>
+      )}
+
+      <div className="container-fluid py-4" style={{ ...contentStyle, backgroundColor: "#f0f8f0", minHeight: "100vh" }}>
       <h1 className="mb-4 text-center" style={{ color: "#2c3e50", fontWeight: "bold" }}>📊 Shopify Orders Analytics Dashboard</h1>
 
       {/* Date Filter */}
@@ -490,5 +538,6 @@ export default function Home() {
         </>
       )}
     </div>
+    </>
   );
 }
