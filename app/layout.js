@@ -1,4 +1,5 @@
 import 'bootstrap/dist/css/bootstrap.min.css';
+import "../styles/globals.css";
 
 export const metadata = {
   title: 'Orders Analytics Dashboard',

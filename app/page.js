@@ -1,15 +1,16 @@
 "use client";
 import React, { useEffect, useState } from "react";
+import { DateTime } from 'luxon';
 
 export default function Home() {
   const [selectedRange, setSelectedRange] = useState("last30");
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
-  const [summary, setSummary] = useState({ totalOrders: 0, totalRevenue: 0, ordersToFulfill: 0 });
+  const [summary, setSummary] = useState({ totalOrders: 0, totalRevenue: 0, ordersToFulfill: 0, amountRefunded: 0, netSales: 0 });
   const [storeTable, setStoreTable] = useState([]);
   const [loading, setLoading] = useState(false);
   const [selectedStore, setSelectedStore] = useState("all");
-  const [displayedSummary, setDisplayedSummary] = useState({ totalOrders: 0, totalRevenue: 0, ordersToFulfill: 0 });
+  const [displayedSummary, setDisplayedSummary] = useState({ totalOrders: 0, totalRevenue: 0, ordersToFulfill: 0, amountRefunded: 0, netSales: 0 });
   const [orders, setOrders] = useState([]);
   const [showModal, setShowModal] = useState(false);
   const [selectedStoreOrders, setSelectedStoreOrders] = useState([]);
@@ -52,36 +53,58 @@ export default function Home() {
     const startDateVal = startOverride ?? startDate;
     const endDateVal = endOverride ?? endDate;
 
-    const now = new Date();
-    let start, end = now;
+    // Use America/Chicago timezone for all calculations
+    const tz = 'America/Chicago';
+    let startDt, endDt;
 
-    if (range === "today") {
-      start = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    } else if (range === "thisWeek") {
-      start = new Date(now);
-      start.setDate(now.getDate() - 7);
-    } else if (range === "thisMonth") {
-      start = new Date(now.getFullYear(), now.getMonth(), 1);
-    } else if (range === "thisYear") {
-      start = new Date(now.getFullYear(), 0, 1);
-    } else if (range === "last30") {
-      start = new Date(now);
-      start.setDate(now.getDate() - 30);
-    } else if (range === "custom" && startDateVal && endDateVal) {
-      start = new Date(startDateVal);
-      end = new Date(endDateVal);
+    if (range === 'today') {
+      const nowChi = DateTime.now().setZone(tz);
+      startDt = nowChi.startOf('day');
+      endDt = nowChi.endOf('day');
+    } else if (range === 'thisWeek') {
+      // keep original semantics: last 7 days (relative to Chicago)
+      const nowChi = DateTime.now().setZone(tz);
+      startDt = nowChi.minus({ days: 7 }).startOf('day');
+      endDt = nowChi.endOf('day');
+    } else if (range === 'thisMonth') {
+      const nowChi = DateTime.now().setZone(tz);
+      startDt = nowChi.startOf('month');
+      endDt = nowChi.endOf('month');
+    } else if (range === 'thisYear') {
+      const nowChi = DateTime.now().setZone(tz);
+      startDt = nowChi.startOf('year');
+      endDt = nowChi.endOf('year');
+    } else if (range === 'last30') {
+      const nowChi = DateTime.now().setZone(tz);
+      startDt = nowChi.minus({ days: 30 }).startOf('day');
+      endDt = nowChi.endOf('day');
+    } else if (range === 'custom' && startDateVal && endDateVal) {
+      // Interpret custom dates as YYYY-MM-DD in America/Chicago timezone
+      startDt = DateTime.fromISO(startDateVal, { zone: tz }).startOf('day');
+      endDt = DateTime.fromISO(endDateVal, { zone: tz }).endOf('day');
     } else {
-      // Default to last 30
-      start = new Date(now);
-      start.setDate(now.getDate() - 30);
+      // default to last 30 days
+      const nowChi = DateTime.now().setZone(tz);
+      startDt = nowChi.minus({ days: 30 }).startOf('day');
+      endDt = nowChi.endOf('day');
     }
 
-    return { start: start.toISOString(), end: end.toISOString() };
+    // Convert to UTC ISO strings so Shopify API receives proper UTC timestamps
+    return { start: startDt.toUTC().toISO(), end: endDt.toUTC().toISO() };
   }
 
   function updateDisplayedSummary() {
     if (selectedStore === "all") {
-      setDisplayedSummary(summary);
+      // Use server-provided values when available, otherwise compute from storeTable
+      let amountRefunded = summary.amountRefunded;
+      let netSales = summary.netSales;
+      if (typeof amountRefunded === 'undefined' || typeof netSales === 'undefined') {
+        const totalLost = storeTable.reduce((s, st) => s + (parseFloat(st.lostAmount || 0) || 0), 0);
+        const totalRevenue = storeTable.reduce((s, st) => s + (parseFloat(st.revenue || 0) || 0), 0);
+        amountRefunded = totalLost;
+        netSales = totalRevenue - totalLost;
+      }
+      setDisplayedSummary({ ...summary, amountRefunded, netSales });
     } else {
       const store = storeTable.find(s => s.brand === selectedStore);
       if (store) {
@@ -89,7 +112,9 @@ export default function Home() {
           totalOrders: store.totalOrders,
           totalRevenue: store.revenue,
           // prefer the server-provided per-store ordersToFulfill, fallback to a safe calculation
-          ordersToFulfill: (typeof store.ordersToFulfill !== 'undefined') ? store.ordersToFulfill : Math.max(0, store.totalOrders - store.fulfilled)
+          ordersToFulfill: (typeof store.ordersToFulfill !== 'undefined') ? store.ordersToFulfill : Math.max(0, store.totalOrders - store.fulfilled),
+          amountRefunded: store.lostAmount || 0,
+          netSales: (store.revenue || 0) - (store.lostAmount || 0)
         });
       }
     }
@@ -118,11 +143,26 @@ export default function Home() {
     handleOpenModal(selectedStore, 'unfulfilled');
   }
 
+  // function formatDate(dateStr) {
+  //   if (!dateStr) return "N/A";
+  //   const d = new Date(dateStr);
+  //   return d.toLocaleString();
+  // }
   function formatDate(dateStr) {
-    if (!dateStr) return "N/A";
-    const d = new Date(dateStr);
-    return d.toLocaleString();
-  }
+  if (!dateStr) return "N/A";
+
+  const d = new Date(dateStr);
+
+  return d.toLocaleString("en-US", {
+    timeZone: "America/Chicago",
+    year: "numeric",
+    month: "short",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+  });
+}
 
   function computeRefundAmount(order) {
     if (!order) return 0;
@@ -255,7 +295,7 @@ export default function Home() {
       )}
 
       <div className="container-fluid py-4" style={{ ...contentStyle, backgroundColor: "#f0f8f0", minHeight: "100vh" }}>
-      <h1 className="mb-4 text-center" style={{ color: "#2c3e50", fontWeight: "bold" }}>📊 Shopify Orders Analytics Dashboard</h1>
+      <h1 className="mb-4 text-center" style={{ color: "#2c3e50", fontWeight: "bold" }}>Shopify Orders Analytics Dashboard</h1>
 
       {/* Date Filter */}
       <div className="row justify-content-center mb-4">
@@ -345,27 +385,43 @@ export default function Home() {
 
       {/* Summary Cards */}
       <div className="row mb-4 g-4">
-        <div className="col-md-4">
-          <div className="card text-white bg-success shadow">
+        <div className="col-6 col-md-2">
+          <div className="card text-black shadow bg-sky">
             <div className="card-body" >
               <h5 className="card-title">Total Orders</h5>
-              <h2 className="card-text" style={{cursor: selectedStore !== 'all' ? 'pointer' : 'default'}} onClick={handleOrdersClick}>{displayedSummary.totalOrders}</h2>
+              <h2 className="card-text" style={{cursor: selectedStore !== 'all' ? 'pointer' : 'default'}} onClick={handleOrdersClick}><b>{displayedSummary.totalOrders}</b></h2>
             </div>
           </div>
         </div>
-        <div className="col-md-4">
-          <div className="card text-white bg-info shadow">
+        <div className="col-6 col-md-2">
+          <div className="card text-black bg-purple shadow">
             <div className="card-body">
               <h5 className="card-title">Total Revenue</h5>
-              <h2 className="card-text">{formatRevenue(displayedSummary.totalRevenue)}</h2>
+              <h2 className="card-text"><b>{formatRevenue(displayedSummary.totalRevenue)}</b></h2>
             </div>
           </div>
         </div>
-        <div className="col-md-4">
-          <div className="card text-white bg-warning shadow">
+        <div className="col-6 col-md-2">
+          <div className="card text-black bg-pink shadow">
             <div className="card-body">
               <h5 className="card-title">Orders to Be Fulfilled</h5>
-              <h2 className="card-text" style={{cursor: selectedStore !== 'all' ? 'pointer' : 'default'}} onClick={handleUnfulfilledOrdersClick}>{displayedSummary.ordersToFulfill}</h2>
+              <h2 className="card-text" style={{cursor: selectedStore !== 'all' ? 'pointer' : 'default'}} onClick={handleUnfulfilledOrdersClick}><b>{displayedSummary.ordersToFulfill}</b></h2>
+            </div>
+          </div>
+        </div>
+        <div className="col-6 col-md-2">
+          <div className="card text-black bg-ornage shadow">
+            <div className="card-body">
+              <h5 className="card-title">Amount Refunded</h5>
+              <h2 className="card-text"><b>{formatRevenue(displayedSummary.amountRefunded)}</b> </h2>
+            </div>
+          </div>
+        </div>
+        <div className="col-6 col-md-2">
+          <div className="card text-black bg-yellow shadow">
+            <div className="card-body">
+              <h5 className="card-title">Net Sales</h5>
+              <h2 className="card-text"><b>{formatRevenue(displayedSummary.netSales)}</b></h2>
             </div>
           </div>
         </div>
@@ -383,12 +439,12 @@ export default function Home() {
                 <tr>
                   <th>Brand</th>
                   <th>Orders</th>
-                  <th>Fulfilled Orders</th>
-                  <th>Partially Refunded Orders</th>
-                  <th>Fully Refunded Orders</th>
-                  <th>Cancelled Orders</th>
+                  <th>Fulfilled</th>
+                  <th>Partially <br></br>Refunded</th>
+                  <th>Fully <br></br> Refunded</th>
+                  <th>Cancelled</th>
                   <th>Revenue</th>
-                   <th>Amount Refunded</th>
+                   <th>Amount <br></br>Refunded</th>
                    <th>Net Sales</th>
                 </tr>
               </thead>
