@@ -441,7 +441,7 @@ export default function Home() {
                   <th>Orders</th>
                   <th>Fulfilled</th>
                   <th>Partially <br></br>Refunded</th>
-                  <th>Fully <br></br> Refunded</th>
+                  {/* <th>Fully <br></br> Refunded</th> */}
                   <th>Cancelled</th>
                   <th>Revenue</th>
                    <th>Amount <br></br>Refunded</th>
@@ -479,7 +479,7 @@ export default function Home() {
                         <span>{store.partiallyRefunded}</span>
                       )}
                     </td>
-                    <td>
+                    {/* <td>
                       {store.fullyRefunded > 0 ? (
                         <button className="btn btn-link p-0 text-decoration-none" onClick={() => handleOpenModal(store.brand, 'full_refund')}>
                           {store.fullyRefunded}
@@ -487,7 +487,7 @@ export default function Home() {
                       ) : (
                         <span>{store.fullyRefunded}</span>
                       )}
-                    </td>
+                    </td> */}
                     <td>
                       {store.cancelled > 0 ? (
                         <button className="btn btn-link p-0 text-decoration-none text-danger" onClick={() => handleOpenModal(store.brand, 'cancelled')}>
