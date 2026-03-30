@@ -306,7 +306,7 @@ export default function Home() {
       )}
 
       <div className="container-fluid py-4" style={{ ...contentStyle, backgroundColor: "#f0f8f0", minHeight: "100vh" }}>
-      <h1 className="mb-4 text-center" style={{ color: "#2c3e50", fontWeight: "bold" }}>Shopify Orders Analytics Dashboard is this </h1>
+      <h1 className="mb-4 text-center" style={{ color: "#2c3e50", fontWeight: "bold" }}>Shopify Orders Analytics Dashboard is this one </h1>
 
       {/* Date Filter */}
       <div className="row justify-content-center mb-4">
