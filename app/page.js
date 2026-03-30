@@ -24,6 +24,15 @@ export default function Home() {
   const [loginEmail, setLoginEmail] = useState("");
   const [loginPassword, setLoginPassword] = useState("");
   const [loginError, setLoginError] = useState("");
+  // Allowed credentials: add objects with `email` and `password` to permit access
+  const allowedCredentials = [
+    { email: 'haris@arcinventador.com', password: 'autelecom123' },
+    { email: 'yasir.khan@arcinventador.com', password: 'autelecom123' },
+    { email: 'awais@arcinventador.com', password: 'autelecom123' },
+    // Example: { email: 'other@example.com', password: 'anotherPass' },
+  ];
+  // Store which allowed email successfully authenticated (empty when not logged in)
+  const [authenticatedEmail, setAuthenticatedEmail] = useState("");
 
   // Pending filter values (local until Apply Filter clicked)
   const [pendingRange, setPendingRange] = useState(selectedRange);
@@ -128,10 +137,12 @@ export default function Home() {
 
   function handleLoginSubmit(e) {
     e.preventDefault();
-    // Strict credential check
-    if (loginEmail === 'haris@arcinventador.com' && loginPassword === 'autelecom123') {
+    // Check entered credentials against the allowed credentials array
+    const isValid = allowedCredentials.some(c => c.email === loginEmail && c.password === loginPassword);
+    if (isValid) {
       setLoginError("");
       setIsAuthenticated(true);
+      setAuthenticatedEmail(loginEmail);
     } else {
       setLoginError('Invalid email or password');
     }
@@ -437,7 +448,7 @@ export default function Home() {
             <table className="table table-striped table-hover">
               <thead style={{ backgroundColor: "#28a745", color: "white" }}>
                 <tr>
-                  <th>Brand</th>
+                  <th>Brand crat</th>
                   <th>Orders</th>
                   <th>Fulfilled</th>
                   <th>Partially <br></br>Refunded</th>
