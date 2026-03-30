@@ -12,6 +12,9 @@ export default function Home() {
   const [selectedStore, setSelectedStore] = useState("all");
   const [displayedSummary, setDisplayedSummary] = useState({ totalOrders: 0, totalRevenue: 0, ordersToFulfill: 0, amountRefunded: 0, netSales: 0 });
   const [orders, setOrders] = useState([]);
+  // Filtered views for restricted users (e.g. yasir.khan@arcinventador.com)
+  const [filteredStoreTable, setFilteredStoreTable] = useState([]);
+  const [filteredOrders, setFilteredOrders] = useState([]);
   const [showModal, setShowModal] = useState(false);
   const [selectedStoreOrders, setSelectedStoreOrders] = useState([]);
   const [modalType, setModalType] = useState(""); // 'partial_refund' | 'full_refund' | 'cancelled'
@@ -56,6 +59,18 @@ export default function Home() {
   useEffect(() => {
     updateDisplayedSummary();
   }, [selectedStore, summary, storeTable]);
+
+  // Recompute filtered views when orders/storeTable or authenticated user changes
+  useEffect(() => {
+    if (authenticatedEmail === 'yasir.khan@arcinventador.com') {
+      const fo = orders.filter(isGenuineJacketOrder);
+      setFilteredOrders(fo);
+      setFilteredStoreTable(aggregateStoreTableFromOrders(storeTable, fo));
+    } else {
+      setFilteredOrders([]);
+      setFilteredStoreTable([]);
+    }
+  }, [orders, storeTable, authenticatedEmail]);
 
   function getDates(rangeOverride, startOverride, endOverride) {
     const range = rangeOverride ?? selectedRange;
@@ -103,19 +118,20 @@ export default function Home() {
   }
 
   function updateDisplayedSummary() {
+    const effectiveStoreTable = (authenticatedEmail === 'yasir.khan@arcinventador.com' && filteredStoreTable.length) ? filteredStoreTable : storeTable;
     if (selectedStore === "all") {
-      // Use server-provided values when available, otherwise compute from storeTable
+      // Use server-provided values when available, otherwise compute from effectiveStoreTable
       let amountRefunded = summary.amountRefunded;
       let netSales = summary.netSales;
       if (typeof amountRefunded === 'undefined' || typeof netSales === 'undefined') {
-        const totalLost = storeTable.reduce((s, st) => s + (parseFloat(st.lostAmount || 0) || 0), 0);
-        const totalRevenue = storeTable.reduce((s, st) => s + (parseFloat(st.revenue || 0) || 0), 0);
+        const totalLost = effectiveStoreTable.reduce((s, st) => s + (parseFloat(st.lostAmount || 0) || 0), 0);
+        const totalRevenue = effectiveStoreTable.reduce((s, st) => s + (parseFloat(st.revenue || 0) || 0), 0);
         amountRefunded = totalLost;
         netSales = totalRevenue - totalLost;
       }
       setDisplayedSummary({ ...summary, amountRefunded, netSales });
     } else {
-      const store = storeTable.find(s => s.brand === selectedStore);
+      const store = effectiveStoreTable.find(s => s.brand === selectedStore);
       if (store) {
         setDisplayedSummary({
           totalOrders: store.totalOrders,
@@ -192,6 +208,44 @@ export default function Home() {
     return 0;
   }
 
+  function isGenuineJacketOrder(order) {
+    if (!order || !order.line_items) return false;
+    return order.line_items.some(item => {
+      const title = (item.title || "").toString().toLowerCase();
+      return title.includes('genuine jacket');
+    });
+  }
+
+  function aggregateStoreTableFromOrders(baseStores, ordersList) {
+    const map = {};
+    ordersList.forEach(o => {
+      const brand = o.store_name || o.source_name || 'unknown';
+      if (!map[brand]) {
+        map[brand] = { brand, totalOrders: 0, fulfilled: 0, partiallyRefunded: 0, cancelled: 0, revenue: 0, lostAmount: 0 };
+      }
+      const entry = map[brand];
+      entry.totalOrders += 1;
+      const fulfillmentStatus = o.fulfillment_status;
+      if (fulfillmentStatus === 'fulfilled' || (o.fulfillments && o.fulfillments.length > 0)) entry.fulfilled += 1;
+      if (o.financial_status === 'partially_refunded') entry.partiallyRefunded += 1;
+      if (o.cancelled_at || o.cancelled || o.cancel_reason) entry.cancelled += 1;
+      const total = parseFloat(o.total_price || o.total || 0) || 0;
+      entry.revenue += total;
+      entry.lostAmount += computeRefundAmount(o) || 0;
+    });
+
+    const result = [];
+    baseStores.forEach(bs => {
+      if (map[bs.brand]) {
+        const m = map[bs.brand];
+        result.push({ brand: bs.brand, totalOrders: m.totalOrders, fulfilled: m.fulfilled, partiallyRefunded: m.partiallyRefunded, cancelled: m.cancelled, revenue: m.revenue, lostAmount: m.lostAmount });
+      } else {
+        result.push({ brand: bs.brand, totalOrders: 0, fulfilled: 0, partiallyRefunded: 0, cancelled: 0, revenue: 0, lostAmount: 0 });
+      }
+    });
+    return result;
+  }
+
   function isActiveOrder(order) {
     const isCancelled = !!order.cancelled_at;
     const isPartiallyRefunded = order.financial_status === 'partially_refunded';
@@ -207,7 +261,8 @@ export default function Home() {
     setModalLoading(true);
     // Simulate a small fetch/delay while filtering
     setTimeout(() => {
-      let filtered = orders.filter(o => o.store_name === storeName);
+      const baseOrders = (authenticatedEmail === 'yasir.khan@arcinventador.com' && filteredOrders.length) ? filteredOrders : orders;
+      let filtered = baseOrders.filter(o => o.store_name === storeName);
       if (type === 'partial_refund') {
         filtered = filtered.filter(o => o.financial_status === 'partially_refunded');
       } else if (type === 'full_refund') {
@@ -276,6 +331,10 @@ export default function Home() {
   }
 
   const contentStyle = !isAuthenticated ? { filter: 'blur(6px)', pointerEvents: 'none', userSelect: 'none' } : {};
+
+  // Effective (possibly filtered) data for the UI — restricted users see reduced views
+  const effectiveStoreTable = (authenticatedEmail === 'yasir.khan@arcinventador.com' && filteredStoreTable.length) ? filteredStoreTable : storeTable;
+  const effectiveOrders = (authenticatedEmail === 'yasir.khan@arcinventador.com' && filteredOrders.length) ? filteredOrders : orders;
 
   return (
     <>
@@ -364,7 +423,7 @@ export default function Home() {
                 onChange={(e) => setPendingStore(e.target.value)}
               >
                 <option value="all">All Stores</option>
-                {storeTable.map((store, index) => (
+                {effectiveStoreTable.map((store, index) => (
                   <option key={index} value={store.brand}>{store.brand}</option>
                 ))}
               </select>
@@ -460,7 +519,7 @@ export default function Home() {
                 </tr>
               </thead>
               <tbody>
-                {storeTable.map((store, index) => (
+                {effectiveStoreTable.map((store, index) => (
                   <tr key={index}>
                     <td className="fw-bold">{store.brand}</td>
                     <td>
