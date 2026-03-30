@@ -448,7 +448,7 @@ export default function Home() {
             <table className="table table-striped table-hover">
               <thead style={{ backgroundColor: "#28a745", color: "white" }}>
                 <tr>
-                  <th>Brand</th>
+                  <th>Brand crat</th>
                   <th>Orders</th>
                   <th>Fulfilled</th>
                   <th>Partially <br></br>Refunded</th>
