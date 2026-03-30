@@ -321,7 +321,7 @@ export default function Home() {
                     value={pendingRange}
                     onChange={(e) => setPendingRange(e.target.value)}
                   >
-                    <option value="today">Today last</option>
+                    <option value="today">Today</option>
                     <option value="thisWeek">This Week</option>
                     <option value="thisMonth">This Month</option>
                     <option value="thisYear">This Year</option>
