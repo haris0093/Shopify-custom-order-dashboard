@@ -24,6 +24,15 @@ export default function Home() {
   const [loginEmail, setLoginEmail] = useState("");
   const [loginPassword, setLoginPassword] = useState("");
   const [loginError, setLoginError] = useState("");
+  // Allowed credentials: add objects with `email` and `password` to permit access
+  const allowedCredentials = [
+    { email: 'haris@arcinventador.com', password: 'autelecom123' },
+    { email: 'yasir.khan@arcinventador.com', password: 'autelecom123' },
+    { email: 'awais@arcinventador.com', password: 'autelecom123' },
+    // Example: { email: 'other@example.com', password: 'anotherPass' },
+  ];
+  // Store which allowed email successfully authenticated (empty when not logged in)
+  const [authenticatedEmail, setAuthenticatedEmail] = useState("");
 
   // Pending filter values (local until Apply Filter clicked)
   const [pendingRange, setPendingRange] = useState(selectedRange);
@@ -128,10 +137,12 @@ export default function Home() {
 
   function handleLoginSubmit(e) {
     e.preventDefault();
-    // Strict credential check
-    if (loginEmail === 'haris@arcinventador.com' && loginPassword === 'autelecom123') {
+    // Check entered credentials against the allowed credentials array
+    const isValid = allowedCredentials.some(c => c.email === loginEmail && c.password === loginPassword);
+    if (isValid) {
       setLoginError("");
       setIsAuthenticated(true);
+      setAuthenticatedEmail(loginEmail);
     } else {
       setLoginError('Invalid email or password');
     }
@@ -295,7 +306,7 @@ export default function Home() {
       )}
 
       <div className="container-fluid py-4" style={{ ...contentStyle, backgroundColor: "#f0f8f0", minHeight: "100vh" }}>
-      <h1 className="mb-4 text-center" style={{ color: "#2c3e50", fontWeight: "bold" }}>Shopify Orders Analytics Dashboard</h1>
+      <h1 className="mb-4 text-center" style={{ color: "#2c3e50", fontWeight: "bold" }}>Shopify Orders Analytics Dashboard test</h1>
 
       {/* Date Filter */}
       <div className="row justify-content-center mb-4">
