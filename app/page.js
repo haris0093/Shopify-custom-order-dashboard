@@ -12,7 +12,7 @@ export default function Home() {
   const [selectedStore, setSelectedStore] = useState("all");
   const [displayedSummary, setDisplayedSummary] = useState({ totalOrders: 0, totalRevenue: 0, ordersToFulfill: 0, amountRefunded: 0, netSales: 0 });
   const [orders, setOrders] = useState([]);
-  // Filtered views for restricted users (e.g. yasir.khan@arcinventador.com)
+  // Filtered views for restricted users (e.g. test@test.com)
   const [filteredStoreTable, setFilteredStoreTable] = useState([]);
   const [filteredOrders, setFilteredOrders] = useState([]);
   const [showModal, setShowModal] = useState(false);
@@ -30,7 +30,7 @@ export default function Home() {
   // Allowed credentials: add objects with `email` and `password` to permit access
   const allowedCredentials = [
     { email: 'haris@arcinventador.com', password: 'autelecom123' },
-    { email: 'yasir.khan@arcinventador.com', password: 'autelecom123' },
+    { email: 'test@test.com', password: 'autelecom123' },
     { email: 'awais@arcinventador.com', password: 'autelecom123' },
     // Example: { email: 'other@example.com', password: 'anotherPass' },
   ];
@@ -62,7 +62,7 @@ export default function Home() {
 
   // Recompute filtered views when orders/storeTable or authenticated user changes
   useEffect(() => {
-    if (authenticatedEmail === 'yasir.khan@arcinventador.com') {
+    if (authenticatedEmail === 'test@test.com') {
       const fo = orders.filter(isGenuineJacketOrder);
       setFilteredOrders(fo);
       setFilteredStoreTable(aggregateStoreTableFromOrders(storeTable, fo));
@@ -118,7 +118,7 @@ export default function Home() {
   }
 
   function updateDisplayedSummary() {
-    const effectiveStoreTable = (authenticatedEmail === 'yasir.khan@arcinventador.com' && filteredStoreTable.length) ? filteredStoreTable : storeTable;
+    const effectiveStoreTable = (authenticatedEmail === 'test@test.com' && filteredStoreTable.length) ? filteredStoreTable : storeTable;
     if (selectedStore === "all") {
       // Use server-provided values when available, otherwise compute from effectiveStoreTable
       let amountRefunded = summary.amountRefunded;
@@ -261,7 +261,7 @@ export default function Home() {
     setModalLoading(true);
     // Simulate a small fetch/delay while filtering
     setTimeout(() => {
-      const baseOrders = (authenticatedEmail === 'yasir.khan@arcinventador.com' && filteredOrders.length) ? filteredOrders : orders;
+      const baseOrders = (authenticatedEmail === 'test@test.com' && filteredOrders.length) ? filteredOrders : orders;
       let filtered = baseOrders.filter(o => o.store_name === storeName);
       if (type === 'partial_refund') {
         filtered = filtered.filter(o => o.financial_status === 'partially_refunded');
@@ -333,8 +333,8 @@ export default function Home() {
   const contentStyle = !isAuthenticated ? { filter: 'blur(6px)', pointerEvents: 'none', userSelect: 'none' } : {};
 
   // Effective (possibly filtered) data for the UI — restricted users see reduced views
-  const effectiveStoreTable = (authenticatedEmail === 'yasir.khan@arcinventador.com' && filteredStoreTable.length) ? filteredStoreTable : storeTable;
-  const effectiveOrders = (authenticatedEmail === 'yasir.khan@arcinventador.com' && filteredOrders.length) ? filteredOrders : orders;
+  const effectiveStoreTable = (authenticatedEmail === 'test@test.com' && filteredStoreTable.length) ? filteredStoreTable : storeTable;
+  const effectiveOrders = (authenticatedEmail === 'test@test.com' && filteredOrders.length) ? filteredOrders : orders;
 
   return (
     <>
