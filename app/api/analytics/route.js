@@ -7,20 +7,30 @@ export async function GET(request) {
     return Response.json({ error: "start_date and end_date are required" }, { status: 400 });
   }
 
-  // Fetch all stores
+  // Determine caller email (if any) and fetch all stores
+  const callerEmail = request.headers.get('x-user-email') || '';
+  const restrictedEmails = ['test@test.com', 'test@example.com'];
+
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 second timeout
   const storesResponse = await fetch(`${request.headers.get('host')?.includes('localhost') ? 'http' : 'https'}://${request.headers.get('host')}/api/stores`, {
-    signal: controller.signal
+    signal: controller.signal,
+    headers: { 'x-user-email': callerEmail }
   });
   clearTimeout(timeoutId);
   const stores = await storesResponse.json();
+
+  // If caller is a restricted/test user, enforce server-side filtering to only allowed store(s)
+  let effectiveStores = stores;
+  if (restrictedEmails.includes(callerEmail)) {
+    effectiveStores = (stores || []).filter(s => s.id === 1);
+  }
 
   const allData = [];
 
   // Fetch primary domains for each store
   const storeDomains = {};
-  for (const store of stores) {
+  for (const store of effectiveStores) {
     const domain = process.env[`SHOPIFY_STORE_${store.id}_DOMAIN`];
     const token = process.env[`SHOPIFY_STORE_${store.id}_TOKEN`];
     if (!domain || !token) continue;
@@ -37,7 +47,7 @@ export async function GET(request) {
   }
 
   // Fetch orders for each store, handling pagination
-  for (const store of stores) {
+  for (const store of effectiveStores) {
     const domain = process.env[`SHOPIFY_STORE_${store.id}_DOMAIN`];
     const token = process.env[`SHOPIFY_STORE_${store.id}_TOKEN`];
 
@@ -114,7 +124,7 @@ export async function GET(request) {
   const handleMap = {};
   const imageMap = {};
 
-  for (const store of stores) {
+  for (const store of effectiveStores) {
     const domain = process.env[`SHOPIFY_STORE_${store.id}_DOMAIN`];
     const token = process.env[`SHOPIFY_STORE_${store.id}_TOKEN`];
     if (!domain || !token) continue;

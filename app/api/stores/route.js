@@ -1,4 +1,6 @@
-export async function GET() {
+export async function GET(request) {
+  const userEmail = request?.headers?.get('x-user-email') || '';
+  const restrictedEmails = ['test@test.com', 'test@example.com'];
   const stores = [
     {
       id: 1,
@@ -49,5 +51,11 @@ export async function GET() {
       token: process.env.SHOPIFY_STORE_8_TOKEN
     }
   ];
+  // If the caller is a restricted/test user, only return the predefined store (id:1)
+  if (restrictedEmails.includes(userEmail)) {
+    const filtered = stores.filter(s => s.id === 1);
+    return Response.json(filtered);
+  }
+
   return Response.json(stores);
 }

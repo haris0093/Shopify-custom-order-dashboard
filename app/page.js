@@ -2,6 +2,10 @@
 import React, { useEffect, useState } from "react";
 import { DateTime } from 'luxon';
 
+// Restricted/test-user configuration: emails that should only see a single store
+const RESTRICTED_EMAILS = ['test@test.com', 'test@example.com'];
+const RESTRICTED_STORE_ID = 1; // the store id to expose to restricted emails
+
 export default function Home() {
   const [selectedRange, setSelectedRange] = useState("last30");
   const [startDate, setStartDate] = useState("");
@@ -31,7 +35,10 @@ export default function Home() {
   const allowedCredentials = [
     { email: 'haris@arcinventador.com', password: 'autelecom123' },
     { email: 'test@test.com', password: 'autelecom123' },
+    { email: 'test@example.com', password: 'autelecom123' },
     { email: 'awais@arcinventador.com', password: 'autelecom123' },
+    { email: 'yasir.khan@arcinventador.com', password: 'autelecom123' },
+    
     // Example: { email: 'other@example.com', password: 'anotherPass' },
   ];
   // Store which allowed email successfully authenticated (empty when not logged in)
@@ -62,8 +69,9 @@ export default function Home() {
 
   // Recompute filtered views when orders/storeTable or authenticated user changes
   useEffect(() => {
-    if (authenticatedEmail === 'test@test.com') {
-      const fo = orders.filter(isGenuineJacketOrder);
+    if (RESTRICTED_EMAILS.includes(authenticatedEmail)) {
+      // Server-side filtering will also be applied, but ensure the client shows only the permitted store
+      const fo = orders.filter(o => o.store_id === RESTRICTED_STORE_ID);
       setFilteredOrders(fo);
       setFilteredStoreTable(aggregateStoreTableFromOrders(storeTable, fo));
     } else {
@@ -261,7 +269,7 @@ export default function Home() {
     setModalLoading(true);
     // Simulate a small fetch/delay while filtering
     setTimeout(() => {
-      const baseOrders = (authenticatedEmail === 'test@test.com' && filteredOrders.length) ? filteredOrders : orders;
+      const baseOrders = (RESTRICTED_EMAILS.includes(authenticatedEmail) && filteredOrders.length) ? filteredOrders : orders;
       let filtered = baseOrders.filter(o => o.store_name === storeName);
       if (type === 'partial_refund') {
         filtered = filtered.filter(o => o.financial_status === 'partially_refunded');
@@ -285,7 +293,9 @@ export default function Home() {
     setLoading(true);
     const { start, end } = getDates(range, sDate, eDate);
     try {
-      const res = await fetch(`/api/analytics?start_date=${start}&end_date=${end}`);
+      const res = await fetch(`/api/analytics?start_date=${start}&end_date=${end}`, {
+        headers: { 'x-user-email': authenticatedEmail }
+      });
       const data = await res.json();
       setSummary(data.summary);
       setStoreTable(data.storeTable);
@@ -302,10 +312,18 @@ export default function Home() {
     if (!changed) return;
 
     // Update applied filters (for UI and summary) and fetch with the pending values
+    // If a restricted user is logged in, force the store selection to the only allowed store
+    let finalPendingStore = pendingStore;
+    const effectiveForSelection = (RESTRICTED_EMAILS.includes(authenticatedEmail) && filteredStoreTable.length) ? filteredStoreTable : storeTable;
+    if (RESTRICTED_EMAILS.includes(authenticatedEmail) && effectiveForSelection.length) {
+      finalPendingStore = effectiveForSelection[0].brand;
+      setPendingStore(finalPendingStore);
+    }
+
     setSelectedRange(pendingRange);
     setStartDate(pendingStartDate);
     setEndDate(pendingEndDate);
-    setSelectedStore(pendingStore);
+    setSelectedStore(finalPendingStore);
 
     loadAnalytics({ range: pendingRange, start: pendingStartDate, end: pendingEndDate });
   }
@@ -333,8 +351,8 @@ export default function Home() {
   const contentStyle = !isAuthenticated ? { filter: 'blur(6px)', pointerEvents: 'none', userSelect: 'none' } : {};
 
   // Effective (possibly filtered) data for the UI — restricted users see reduced views
-  const effectiveStoreTable = (authenticatedEmail === 'test@test.com' && filteredStoreTable.length) ? filteredStoreTable : storeTable;
-  const effectiveOrders = (authenticatedEmail === 'test@test.com' && filteredOrders.length) ? filteredOrders : orders;
+  const effectiveStoreTable = (RESTRICTED_EMAILS.includes(authenticatedEmail) && filteredStoreTable.length) ? filteredStoreTable : storeTable;
+  const effectiveOrders = (RESTRICTED_EMAILS.includes(authenticatedEmail) && filteredOrders.length) ? filteredOrders : orders;
 
   return (
     <>
